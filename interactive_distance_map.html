@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Interactive Distance Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-o9N1j7kGStb9ZR2Fv9YxRyvCb4s46HoPazTA/gkG4Zk=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-o8ljOSAmhpX6wXNjZspuEKKbz2uiG2ef+Zi3A2J6pLg=" crossorigin=""></script>
 <style>
     body{font-family:sans-serif;display:flex;flex-direction:column;height:100vh;margin:0;}
     .header{padding:15px;background-color:#2c3e50;color:#fff;text-align:center;}
@@ -16,12 +18,7 @@
     input[type="range"]::-webkit-slider-thumb{appearance:none;width:18px;height:18px;background:#3498db;border-radius:50%;cursor:pointer;}
     .distance-display{font-weight:bold;color:#e74c3c;min-width:60px;text-align:right;font-size:0.9em;}
     .map-frame{flex-grow:1;position:relative;overflow:hidden;}
-    .map-iframe{width:100%;height:100%;border:none;position:absolute;top:0;left:0;}
-    .distance-overlay{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1000;}
-    .ring{position:absolute;border-radius:50%;border:3px solid;transform:translate(-50%,-50%);}
-    .outer-ring{border-color:#e74c3c;background-color:rgba(231,76,60,0.1);}
-    .inner-ring{border-color:#74b9ff;background-color:rgba(116,185,255,0.3);}
-    .center-marker{position:absolute;width:12px;height:12px;background:#2c3e50;border:2px solid #fff;border-radius:50%;z-index:1001;transform:translate(-50%,-50%);box-shadow:0 2px 4px rgba(0,0,0,0.3);}
+    #map{width:100%;height:100%;}
     .info-box{position:absolute;top:10px;left:10px;background:rgba(255,255,255,0.95);padding:10px;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.2);font-size:0.8em;z-index:1001;pointer-events:auto;}
     .info-row{margin:3px 0;}
     .switch-button{position:absolute;bottom:10px;right:10px;background:#3498db;color:#fff;border:none;padding:8px 12px;border-radius:6px;font-size:0.8em;cursor:pointer;z-index:1001;pointer-events:auto;}
@@ -46,50 +43,38 @@
     </div>
 </div>
 
-<div class="map-frame" id="map-frame">
-    <iframe 
-        id="map-iframe"
-        class="map-iframe"
-        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d9464.97!2d-2.006!3d53.447!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x487bb3c0c0c0c0c0%3A0x0!2sSK14+6JE!5e0!3m2!1sen!2suk!4v1600000000000!5m2!1sen!2suk"
-        allowfullscreen
-        loading="lazy"
-        referrerpolicy="no-referrer-when-downgrade">
-    </iframe>
+    <div class="map-frame" id="map-frame">
+        <div id="map"></div>
 
-    <div class="distance-overlay" id="overlay">
-        <div class="ring outer-ring" id="outer-ring"></div>
-        <div class="ring inner-ring" id="inner-ring"></div>
-        <div class="center-marker" id="center-marker"></div>
+        <div class="info-box">
+            <div class="info-row"><strong>Distance Ring</strong></div>
+            <div class="info-row">Inner: <span id="inner-display">9.5</span> miles</div>
+            <div class="info-row">Outer: <span id="outer-display">10.4</span> miles</div>
+            <div class="info-row">Width: <span id="width-display">0.9</span> miles</div>
+        </div>
+
+        <button class="switch-button" id="switch-map" onclick="switchMapType()">OpenStreetMap</button>
     </div>
-
-    <div class="info-box">
-        <div class="info-row"><strong>Distance Ring</strong></div>
-        <div class="info-row">Inner: <span id="inner-display">9.5</span> miles</div>
-        <div class="info-row">Outer: <span id="outer-display">10.4</span> miles</div>
-        <div class="info-row">Width: <span id="width-display">0.9</span> miles</div>
-    </div>
-
-    <button class="switch-button" id="switch-map" onclick="switchMapType()">OpenStreetMap</button>
-</div>
 
 <script>
     const minSlider = document.getElementById('min-distance');
     const maxSlider = document.getElementById('max-distance');
     const minLabel = document.getElementById('min-dist-label');
     const maxLabel = document.getElementById('max-dist-label');
-    const outerRing = document.getElementById('outer-ring');
-    const innerRing = document.getElementById('inner-ring');
-    const centerMarker = document.getElementById('center-marker');
     const innerDisplay = document.getElementById('inner-display');
     const outerDisplay = document.getElementById('outer-display');
     const widthDisplay = document.getElementById('width-display');
-    const mapFrame = document.getElementById('map-frame');
-    const mapIframe = document.getElementById('map-iframe');
 
     const centerLat = 53.447;
     const centerLng = -2.006;
 
     let currentMapType = 'google';
+    let map;
+    let outerCircle;
+    let innerCircle;
+    let marker;
+    let googleLayer;
+    let osmLayer;
 
     function updateDistanceRing() {
         const minDistance = parseFloat(minSlider.value);
@@ -103,44 +88,54 @@
         minLabel.textContent = minDistance.toFixed(1) + 'mi';
         maxLabel.textContent = maxDistance.toFixed(1) + 'mi';
 
-        const containerRect = mapFrame.getBoundingClientRect();
-        const centerX = containerRect.width / 2;
-        const centerY = containerRect.height / 2;
-
-        const pixelsPerMile = Math.min(containerRect.width, containerRect.height) / 40;
-
-        const outerRadiusPx = maxDistance * pixelsPerMile;
-        const innerRadiusPx = minDistance * pixelsPerMile;
-
-        centerMarker.style.left = centerX + 'px';
-        centerMarker.style.top = centerY + 'px';
-
-        outerRing.style.width = (outerRadiusPx * 2) + 'px';
-        outerRing.style.height = (outerRadiusPx * 2) + 'px';
-        outerRing.style.left = centerX + 'px';
-        outerRing.style.top = centerY + 'px';
-
-        innerRing.style.width = (innerRadiusPx * 2) + 'px';
-        innerRing.style.height = (innerRadiusPx * 2) + 'px';
-        innerRing.style.left = centerX + 'px';
-        innerRing.style.top = centerY + 'px';
-
         innerDisplay.textContent = minDistance.toFixed(1);
         outerDisplay.textContent = maxDistance.toFixed(1);
         widthDisplay.textContent = (maxDistance - minDistance).toFixed(1);
 
-        innerRing.style.display = minDistance === 0 ? 'none' : 'block';
+        if (!map) {
+            return;
+        }
+
+        const outerRadiusMeters = maxDistance * 1609.34;
+        const innerRadiusMeters = minDistance * 1609.34;
+
+        outerCircle.setRadius(outerRadiusMeters);
+
+        if (minDistance === 0) {
+            if (map.hasLayer(innerCircle)) {
+                map.removeLayer(innerCircle);
+            }
+        } else {
+            innerCircle.setRadius(innerRadiusMeters);
+            if (!map.hasLayer(innerCircle)) {
+                innerCircle.addTo(map);
+            }
+        }
     }
 
     function switchMapType() {
         if (currentMapType === 'google') {
-            mapIframe.src = `https://www.openstreetmap.org/export/embed.html?bbox=${centerLng-0.15}%2C${centerLat-0.1}%2C${centerLng+0.15}%2C${centerLat+0.1}&layer=mapnik&marker=${centerLat}%2C${centerLng}`;
             currentMapType = 'osm';
             document.getElementById('switch-map').textContent = 'Google Maps';
+            if (googleLayer && map.hasLayer(googleLayer)) {
+                map.removeLayer(googleLayer);
+            }
+            if (osmLayer) {
+                if (!map.hasLayer(osmLayer)) {
+                    osmLayer.addTo(map);
+                }
+            }
         } else {
-            mapIframe.src = `https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d19000!2d${centerLng}!3d${centerLat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sen!2suk`;
             currentMapType = 'google';
             document.getElementById('switch-map').textContent = 'OpenStreetMap';
+            if (osmLayer && map.hasLayer(osmLayer)) {
+                map.removeLayer(osmLayer);
+            }
+            if (googleLayer) {
+                if (!map.hasLayer(googleLayer)) {
+                    googleLayer.addTo(map);
+                }
+            }
         }
     }
 
@@ -153,13 +148,54 @@
 
     maxSlider.addEventListener('input', () => {
         if (parseFloat(maxSlider.value) < parseFloat(minSlider.value)) {
-            minSlider.value = maxSlider.value;
+            maxSlider.value = minSlider.value;
+            return;
         }
         updateDistanceRing();
     });
 
     window.addEventListener('resize', updateDistanceRing);
-    window.addEventListener('load', updateDistanceRing);
+
+    window.addEventListener('load', () => {
+        map = L.map('map', {
+            center: [centerLat, centerLng],
+            zoom: 13,
+            zoomControl: false,
+            attributionControl: true,
+            scrollWheelZoom: false,
+            doubleClickZoom: false
+        });
+
+        googleLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=r&x={x}&y={y}&z={z}', {
+            maxZoom: 19,
+            attribution: '&copy; Google'
+        });
+
+        osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+        });
+
+        googleLayer.addTo(map);
+
+        marker = L.marker([centerLat, centerLng]).addTo(map);
+
+        outerCircle = L.circle([centerLat, centerLng], {
+            color: '#e74c3c',
+            fillColor: '#e74c3c',
+            fillOpacity: 0.1,
+            weight: 2
+        }).addTo(map);
+
+        innerCircle = L.circle([centerLat, centerLng], {
+            color: '#74b9ff',
+            fillColor: '#74b9ff',
+            fillOpacity: 0.3,
+            weight: 2
+        }).addTo(map);
+
+        updateDistanceRing();
+    });
 </script>
 </body>
 </html>
