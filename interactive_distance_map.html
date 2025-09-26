@@ -1,201 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Interactive Distance Map</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-o9N1j7kGStb9ZR2Fv9YxRyvCb4s46HoPazTA/gkG4Zk=" crossorigin="" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-o8ljOSAmhpX6wXNjZspuEKKbz2uiG2ef+Zi3A2J6pLg=" crossorigin=""></script>
-<style>
-    body{font-family:sans-serif;display:flex;flex-direction:column;height:100vh;margin:0;}
-    .header{padding:15px;background-color:#2c3e50;color:#fff;text-align:center;}
-    .header h1{margin:0 0 5px 0;font-size:1.5em;}
-    .header p{margin:0;font-size:0.9em;opacity:0.9;}
-    .controls{padding:15px;background-color:#ecf0f1;border-bottom:1px solid #bdc3c7;}
-    .control-group{margin-bottom:12px;display:flex;align-items:center;gap:10px;}
-    label{min-width:90px;font-weight:bold;font-size:0.9em;}
-    input[type="range"]{flex-grow:1;height:6px;background:#ddd;border-radius:3px;outline:none;}
-    input[type="range"]::-webkit-slider-thumb{appearance:none;width:18px;height:18px;background:#3498db;border-radius:50%;cursor:pointer;}
-    .distance-display{font-weight:bold;color:#e74c3c;min-width:60px;text-align:right;font-size:0.9em;}
-    .map-frame{flex-grow:1;position:relative;overflow:hidden;}
-    #map{width:100%;height:100%;}
-    .info-box{position:absolute;top:10px;left:10px;background:rgba(255,255,255,0.95);padding:10px;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.2);font-size:0.8em;z-index:1001;pointer-events:auto;}
-    .info-row{margin:3px 0;}
-    .switch-button{position:absolute;bottom:10px;right:10px;background:#3498db;color:#fff;border:none;padding:8px 12px;border-radius:6px;font-size:0.8em;cursor:pointer;z-index:1001;pointer-events:auto;}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distance Rings Visualiser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
-<div class="header">
-    <h1>Interactive Distance Map</h1>
-    <p>SK14 6JE (Hattersley, Greater Manchester)</p>
-</div>
+<header>
+    <h1>Interactive Distance Rings</h1>
+    <p>Explore concentric distance bands centred on SK14 6JE (Hattersley, Greater Manchester).</p>
+</header>
 
-<div class="controls">
-    <div class="control-group">
-        <label for="min-distance">Inner:</label>
-        <input type="range" id="min-distance" min="0" max="20" step="0.1" value="9.5">
-        <span class="distance-display" id="min-dist-label">9.5mi</span>
-    </div>
-    <div class="control-group">
-        <label for="max-distance">Outer:</label>
-        <input type="range" id="max-distance" min="0" max="20" step="0.1" value="10.4">
-        <span class="distance-display" id="max-dist-label">10.4mi</span>
-    </div>
-</div>
+<main>
+    <section class="panel" aria-labelledby="range-panel">
+        <h2 id="range-panel">Distance Controls</h2>
+        <p>Use the sliders to adjust the inner and outer radii. Values are expressed in miles.</p>
 
-    <div class="map-frame" id="map-frame">
+        <form id="range-form">
+            <div class="control-group">
+                <label for="min-distance">Inner radius</label>
+                <div class="range-input">
+                    <input type="range" id="min-distance" name="min-distance" min="0" max="25" step="0.1" value="9.5"
+                           aria-describedby="inner-hint">
+                </div>
+                <output id="min-distance-output" for="min-distance">9.5 mi</output>
+            </div>
+
+            <div class="control-group">
+                <label for="max-distance">Outer radius</label>
+                <div class="range-input">
+                    <input type="range" id="max-distance" name="max-distance" min="0" max="25" step="0.1" value="10.4"
+                           aria-describedby="outer-hint">
+                </div>
+                <output id="max-distance-output" for="max-distance">10.4 mi</output>
+            </div>
+
+            <fieldset>
+                <legend>Tips</legend>
+                <span id="inner-hint">Keep the inner radius less than or equal to the outer radius.</span>
+                <span id="outer-hint">Widen the ring to capture a broader search region.</span>
+                <span class="badge" id="width-badge">Moderate width</span>
+            </fieldset>
+
+            <button type="reset" class="button button-secondary">
+                Reset defaults
+            </button>
+        </form>
+    </section>
+
+    <section class="map-shell" aria-label="Distance visualisation map">
         <div id="map"></div>
+        <aside class="map-overlay" role="status" aria-live="polite">
+            <div>
+                <span class="overlay-label">Inner radius</span>
+                <span class="overlay-value"><span id="inner-display">9.5</span> miles</span>
+            </div>
+            <div>
+                <span class="overlay-label">Outer radius</span>
+                <span class="overlay-value"><span id="outer-display">10.4</span> miles</span>
+            </div>
+            <div>
+                <span class="overlay-label">Ring width</span>
+                <span class="overlay-width"><span id="width-display">0.9</span> miles wide</span>
+            </div>
+        </aside>
+    </section>
+</main>
 
-        <div class="info-box">
-            <div class="info-row"><strong>Distance Ring</strong></div>
-            <div class="info-row">Inner: <span id="inner-display">9.5</span> miles</div>
-            <div class="info-row">Outer: <span id="outer-display">10.4</span> miles</div>
-            <div class="info-row">Width: <span id="width-display">0.9</span> miles</div>
-        </div>
+<footer>
+    Built with <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a> and open basemaps.
+</footer>
 
-        <button class="switch-button" id="switch-map" onclick="switchMapType()">OpenStreetMap</button>
-    </div>
-
-<script>
-    const minSlider = document.getElementById('min-distance');
-    const maxSlider = document.getElementById('max-distance');
-    const minLabel = document.getElementById('min-dist-label');
-    const maxLabel = document.getElementById('max-dist-label');
-    const innerDisplay = document.getElementById('inner-display');
-    const outerDisplay = document.getElementById('outer-display');
-    const widthDisplay = document.getElementById('width-display');
-
-    const centerLat = 53.447;
-    const centerLng = -2.006;
-
-    let currentMapType = 'google';
-    let map;
-    let outerCircle;
-    let innerCircle;
-    let marker;
-    let googleLayer;
-    let osmLayer;
-
-    function updateDistanceRing() {
-        const minDistance = parseFloat(minSlider.value);
-        const maxDistance = parseFloat(maxSlider.value);
-
-        if (minDistance > maxDistance) {
-            minSlider.value = maxDistance;
-            return;
-        }
-
-        minLabel.textContent = minDistance.toFixed(1) + 'mi';
-        maxLabel.textContent = maxDistance.toFixed(1) + 'mi';
-
-        innerDisplay.textContent = minDistance.toFixed(1);
-        outerDisplay.textContent = maxDistance.toFixed(1);
-        widthDisplay.textContent = (maxDistance - minDistance).toFixed(1);
-
-        if (!map) {
-            return;
-        }
-
-        const outerRadiusMeters = maxDistance * 1609.34;
-        const innerRadiusMeters = minDistance * 1609.34;
-
-        outerCircle.setRadius(outerRadiusMeters);
-
-        if (minDistance === 0) {
-            if (map.hasLayer(innerCircle)) {
-                map.removeLayer(innerCircle);
-            }
-        } else {
-            innerCircle.setRadius(innerRadiusMeters);
-            if (!map.hasLayer(innerCircle)) {
-                innerCircle.addTo(map);
-            }
-        }
-    }
-
-    function switchMapType() {
-        if (currentMapType === 'google') {
-            currentMapType = 'osm';
-            document.getElementById('switch-map').textContent = 'Google Maps';
-            if (googleLayer && map.hasLayer(googleLayer)) {
-                map.removeLayer(googleLayer);
-            }
-            if (osmLayer) {
-                if (!map.hasLayer(osmLayer)) {
-                    osmLayer.addTo(map);
-                }
-            }
-        } else {
-            currentMapType = 'google';
-            document.getElementById('switch-map').textContent = 'OpenStreetMap';
-            if (osmLayer && map.hasLayer(osmLayer)) {
-                map.removeLayer(osmLayer);
-            }
-            if (googleLayer) {
-                if (!map.hasLayer(googleLayer)) {
-                    googleLayer.addTo(map);
-                }
-            }
-        }
-    }
-
-    minSlider.addEventListener('input', () => {
-        if (parseFloat(minSlider.value) > parseFloat(maxSlider.value)) {
-            minSlider.value = maxSlider.value;
-        }
-        updateDistanceRing();
-    });
-
-    maxSlider.addEventListener('input', () => {
-        if (parseFloat(maxSlider.value) < parseFloat(minSlider.value)) {
-            maxSlider.value = minSlider.value;
-            return;
-        }
-        updateDistanceRing();
-    });
-
-    window.addEventListener('resize', updateDistanceRing);
-
-    window.addEventListener('load', () => {
-        map = L.map('map', {
-            center: [centerLat, centerLng],
-            zoom: 13,
-            zoomControl: false,
-            attributionControl: true,
-            scrollWheelZoom: false,
-            doubleClickZoom: false
-        });
-
-        googleLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=r&x={x}&y={y}&z={z}', {
-            maxZoom: 19,
-            attribution: '&copy; Google'
-        });
-
-        osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; OpenStreetMap contributors'
-        });
-
-        googleLayer.addTo(map);
-
-        marker = L.marker([centerLat, centerLng]).addTo(map);
-
-        outerCircle = L.circle([centerLat, centerLng], {
-            color: '#e74c3c',
-            fillColor: '#e74c3c',
-            fillOpacity: 0.1,
-            weight: 2
-        }).addTo(map);
-
-        innerCircle = L.circle([centerLat, centerLng], {
-            color: '#74b9ff',
-            fillColor: '#74b9ff',
-            fillOpacity: 0.3,
-            weight: 2
-        }).addTo(map);
-
-        updateDistanceRing();
-    });
-</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="assets/js/map.js"></script>
 </body>
 </html>
